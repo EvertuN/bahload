@@ -9,6 +9,7 @@ from uuid import uuid4
 import yt_dlp
 
 from models import EnqueueRequest
+from dependencies import find_ffmpeg_directory
 from repository import JobRepository
 
 log = logging.getLogger('bahload')
@@ -167,10 +168,11 @@ class DownloadManager:
                 self.queue.task_done()
 
     def _download(self, job, event):
-        if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
+        ffmpeg_directory = find_ffmpeg_directory()
+        if ffmpeg_directory is None:
             raise RuntimeError('ffmpeg missing')
         options = job['options']
-        folder = Path(options['destination']) / job['id']
+        folder = Path(options['destination']) / '.bahload' / job['id']
         folder.mkdir(parents=True, exist_ok=True)
 
         def hook(data):
@@ -191,7 +193,8 @@ class DownloadManager:
                     raise Cancelled()
                 self.repo.update(job['id'], status='processing', speed=None)
 
-        opts = {**base_options(), 'noplaylist': True, 'windowsfilenames': True, 'restrictfilenames': True,
+        opts = {**base_options(), 'ffmpeg_location': ffmpeg_directory,
+                'noplaylist': True, 'windowsfilenames': True, 'restrictfilenames': True,
                 'outtmpl': str(folder / '%(title).100s.%(ext)s'),
                 'progress_hooks': [hook], 'postprocessor_hooks': [post_hook],
                 'match_filter': lambda info, **kw: 'Live event not started or still live' if info.get('is_live') or info.get('live_status') == 'is_upcoming' else None}
@@ -212,4 +215,31 @@ class DownloadManager:
         files = list(folder.glob(f'*.{options["format"]}'))
         if len(files) != 1:
             raise RuntimeError('Arquivo final não encontrado')
-        return files[0].resolve()
+        return publish_file(files[0], Path(options['destination']))
+
+
+def publish_file(source: Path, destination: Path) -> Path:
+    """Exclusive creation protects existing files, including concurrent downloads."""
+    number = 0
+    while True:
+        suffix = f' ({number})' if number else ''
+        target = destination / f'{source.stem}{suffix}{source.suffix}'
+        try:
+            output = target.open('xb')
+        except FileExistsError:
+            number += 1
+            continue
+        try:
+            with output, source.open('rb') as input_file:
+                shutil.copyfileobj(input_file, output)
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+        source.unlink()
+        # Only remove empty staging folders; partial streams may remain for retry.
+        for folder in (source.parent, source.parent.parent):
+            try:
+                folder.rmdir()
+            except OSError:
+                pass
+        return target.resolve()

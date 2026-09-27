@@ -31,10 +31,20 @@ function updateSelection() {
   const boxes = [...$('videos').querySelectorAll('input')];
   const count = boxes.filter(b => b.checked).length;
   $('selection-count').textContent = `${count} de ${boxes.length} selecionados`;
-  $('enqueue').disabled = count === 0;
+  $('enqueue').disabled = count === 0 || !$('destination').value;
   $('toggle-all').textContent = count === boxes.length ? 'Desmarcar todos' : 'Marcar todos';
 }
 $('toggle-all').onclick = () => { const boxes = [...$('videos').querySelectorAll('input')]; const checked = !boxes.every(b => b.checked); boxes.forEach(b => b.checked = checked); updateSelection(); };
+$('choose-folder').onclick = async () => {
+  $('choose-folder').disabled = true;
+  $('choose-folder').textContent = 'Escolhendo…';
+  try {
+    const result = await api('/api/destination', {});
+    if (result.destination) $('destination').value = result.destination;
+    updateSelection();
+  } catch (error) { notice(error.message, true); }
+  finally { $('choose-folder').disabled = false; $('choose-folder').textContent = 'Escolher pasta'; }
+};
 $('inspect-form').addEventListener('submit', async event => {
   event.preventDefault(); $('inspect').disabled = true; $('inspect').textContent = 'Buscando…';
   try {
@@ -47,6 +57,7 @@ $('inspect-form').addEventListener('submit', async event => {
   finally { $('inspect').disabled = false; $('inspect').textContent = 'Adicionar'; }
 });
 $('enqueue').onclick = async () => {
+  if (!$('destination').value) { notice('Escolha a pasta de destino antes de baixar.', true); return; }
   const items = [...$('videos').querySelectorAll('input:checked')].map(b => selectedItems[Number(b.value)]);
   const body = {items, options: {kind: $('kind').value, format: $('format').value, bitrate: $('kind').value === 'audio' ? Number($('quality').value) : 192, resolution: $('kind').value === 'video' ? $('quality').value : 'best', destination: $('destination').value, retries: Number($('retries').value)}};
   $('enqueue').disabled = true;
@@ -82,7 +93,7 @@ function renderJobs(jobs) {
       const retry = ['error','cancelled'].includes(job.status); const button = element('button','btn btn-sm btn-outline-dark',retry ? 'Tentar novamente' : 'Cancelar');
       button.onclick = async () => { button.disabled = true; try { await api(`/api/jobs/${job.id}/${retry ? 'retry' : 'cancel'}`, {}); } catch(error) { notice(error.message,true); button.disabled = false; } }; actions.append(button);
     }
-    if (job.status === 'completed') { const link = element('a','btn btn-sm btn-dark','Salvar pelo navegador'); link.href = `/api/jobs/${job.id}/file`; actions.append(link); content.append(element('p','job-path mt-2 mb-0',job.path)); }
+    if (job.status === 'completed') content.append(element('p','job-path mt-2 mb-0',`Salvo em: ${job.path}`));
     content.append(actions); top.append(img,content); card.append(top);
   });
 }
@@ -91,7 +102,6 @@ stream.onopen = () => $('connection').textContent = '● Atualização ao vivo';
 stream.onmessage = event => renderJobs(JSON.parse(event.data));
 stream.onerror = () => $('connection').textContent = 'Reconectando…';
 api('/api/config').then(config => {
-  $('destination').value = config.destination;
   const missing = []; if (!config.ffmpeg) missing.push('FFmpeg e FFprobe não encontrados no PATH.'); if (!config.javascript) missing.push('Instale Deno ou Node.js para o yt-dlp.');
   if (missing.length) { $('dependencies').textContent = missing.join(' '); $('dependencies').classList.remove('d-none'); }
 }).catch(error => notice(error.message,true));

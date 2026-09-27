@@ -6,6 +6,7 @@ YouTube Downloader local em Python, FastAPI, yt-dlp, Bootstrap 5 e JavaScript pu
 
 - Python **3.11 ou superior**.
 - **FFmpeg e FFprobe** instalados e disponíveis no PATH. Confira com `ffmpeg -version` e `ffprobe -version`. Obtenha os binários em https://ffmpeg.org/download.html.
+- No Windows, o aplicativo também detecta automaticamente `C:\ffmpeg\bin`, mesmo se o terminal estiver com um PATH antigo. Para outra localização, defina `$env:BAHLOAD_FFMPEG_DIR = 'D:\ferramentas\ffmpeg\bin'` antes de iniciar. A pasta deve conter ambos os executáveis nativos, `ffmpeg.exe` e `ffprobe.exe`; o caminho detectado é passado diretamente ao yt-dlp.
 - **Deno (recomendado pelo yt-dlp) ou Node.js compatível com o yt-dlp** no PATH, para resolver os desafios JavaScript do YouTube. O extra `yt-dlp[default]` inclui os scripts EJS. Consulte os requisitos atuais em https://github.com/yt-dlp/yt-dlp#dependencies.
 - Internet para acessar o YouTube e carregar o CSS Bootstrap via CDN.
 
@@ -38,9 +39,11 @@ Acesse **http://127.0.0.1:8000**. Mantenha o servidor no endereço local padrão
 1. Cole um link de vídeo, Shorts ou playlist e clique em **Adicionar**. Um link de vídeo com `list=` abre a playlist.
 2. Revise a lista de thumbnails e títulos; todos vêm selecionados. Use **Marcar/desmarcar todos** ou os checkboxes individuais.
 3. Escolha áudio (MP3, M4A, WAV, Opus) ou vídeo com áudio (MP4, MKV, WebM), e a qualidade.
-4. Em **Opções de download**, configure a pasta e os retries automáticos (0–5; padrão 2, além da tentativa inicial).
+4. Clique em **Escolher pasta** e selecione o destino no seletor de pastas do sistema. A escolha é obrigatória antes de baixar. Em **Opções de download**, configure os retries automáticos (0–5; padrão 2, além da tentativa inicial).
 5. Clique em **Baixar selecionados**. A fila mostra status, progresso, bytes, velocidade e tentativas. Erros e cancelamentos podem ser retomados individualmente.
-6. Ao concluir, o caminho absoluto fica visível e **Salvar pelo navegador** entrega o arquivo.
+6. Ao concluir, o arquivo já está salvo diretamente na pasta escolhida e o caminho absoluto fica visível. Não é necessário salvar outra cópia pelo navegador.
+
+O seletor abre no computador onde o servidor está rodando e requer uma sessão gráfica com Tkinter (incluído no instalador padrão do Python para Windows; no Linux, instale o pacote `python3-tk` da sua distribuição). Cancelar o seletor mantém a escolha anterior.
 
 A tela tem um painel de entrada no topo e cartões de downloads abaixo. O visual é preto e branco, com badges coloridos de status, barras de progresso e layout adaptado para celulares. O indicador “Atualização ao vivo” informa a conexão SSE; ela reconecta automaticamente.
 
@@ -55,7 +58,7 @@ A tela tem um painel de entrada no topo e cartões de downloads abaixo. O visual
 - Backoff entre tentativas: 2, 4, 8… segundos. Downloads concluídos não são repetidos por retry de outro item.
 - Duplicatas são detectadas pelo ID do vídeo na sessão, inclusive em links de formatos diferentes e dentro da seleção. A interface pede confirmação explícita para criar cópias.
 - Reiniciar o servidor limpa fila/histórico em memória, mas preserva arquivos. Detecção de duplicatas não persiste entre sessões.
-- Cada item ganha uma subpasta única no destino. O nome do arquivo usa somente o título sanitizado pelo yt-dlp, limitado a 100 caracteres, e a extensão escolhida. As subpastas evitam sobrescrever arquivos com títulos iguais.
+- O arquivo final fica diretamente na pasta escolhida. O nome usa somente o título sanitizado pelo yt-dlp, limitado a 100 caracteres, e a extensão escolhida. Nomes repetidos recebem sufixos `(1)`, `(2)` etc., sem sobrescrever arquivos existentes. Durante o processamento, os arquivos temporários ficam em `.bahload/<id>` dentro do destino; pastas temporárias vazias são removidas ao concluir.
 - Conteúdo privado, restrito, removido, bloqueado regionalmente ou lives pode falhar. Não são implementados login, cookies ou contorno de restrições.
 - Diagnóstico em `app.log`, com rotação (2 MB e dois backups). Se o YouTube mudar, atualize o yt-dlp e repita os testes: `python -m pip install --upgrade "yt-dlp[default]"`.
 
@@ -64,12 +67,12 @@ A tela tem um painel de entrada no topo e cartões de downloads abaixo. O visual
 ```text
 main.py              Rotas, SSE, ciclo de vida e log
 models.py            Validação de URLs e opções
+folder_picker.py     Seletor nativo de pasta em processo separado
 repository.py        Contrato de armazenamento e implementação em memória
 downloader.py        Inspeção, fila, workers e hooks yt-dlp
 templates/index.html Interface Bootstrap
 static/              JavaScript e CSS
 tests/               Testes sem downloads externos
-downloads/           Destino padrão (ignorado no Git)
 ```
 
 O repositório fornece snapshots e usa lock reentrante para operações atômicas. Uma implementação SQLite futura deve preservar o contrato e as transações usadas pelo gerenciador; os eventos de cancelamento permanecem no gerenciador.

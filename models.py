@@ -45,7 +45,7 @@ class Options(BaseModel):
     format: Literal['mp3', 'm4a', 'wav', 'opus', 'mp4', 'mkv', 'webm'] = 'mp3'
     bitrate: Literal[128, 192, 320] = 192
     resolution: Literal['best', '1080', '720', '480'] = 'best'
-    destination: str = Field(default='./downloads', min_length=1, max_length=1000)
+    destination: str = Field(min_length=1, max_length=1000)
     retries: int = Field(default=2, ge=0, le=5)
 
     @model_validator(mode='after')

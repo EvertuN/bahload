@@ -5,6 +5,9 @@ from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
+from threading import Lock
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -14,10 +17,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from downloader import DownloadManager, friendly_error, inspect_url
+from dependencies import find_ffmpeg_directory
 from models import EnqueueRequest, InspectRequest
 from repository import MemoryRepository
 
 ROOT = Path(__file__).resolve().parent
+picker_lock = Lock()
 logger = logging.getLogger('bahload')
 logger.setLevel(logging.INFO)
 if not logger.handlers:
@@ -64,8 +69,10 @@ def index():
 
 @app.get('/api/config')
 def config():
+    ffmpeg_directory = find_ffmpeg_directory()
     return {'destination': str((ROOT / 'downloads').resolve()),
-            'ffmpeg': bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),
+            'ffmpeg': ffmpeg_directory is not None,
+            'ffmpeg_directory': ffmpeg_directory,
             'javascript': bool(shutil.which('deno') or shutil.which('node'))}
 
 
@@ -76,6 +83,23 @@ def inspect(body: InspectRequest):
     except Exception as error:
         logger.exception('Inspeção falhou')
         raise HTTPException(400, friendly_error(error)) from error
+
+
+@app.post('/api/destination')
+def choose_destination():
+    if not picker_lock.acquire(blocking=False):
+        raise HTTPException(409, 'O seletor de pastas já está aberto.')
+    try:
+        result = subprocess.run([sys.executable, str(ROOT / 'folder_picker.py')],
+                                capture_output=True, text=True, timeout=180, check=True)
+        return json.loads(result.stdout)
+    except subprocess.TimeoutExpired as error:
+        raise HTTPException(408, 'O seletor expirou. Clique em Escolher pasta novamente.') from error
+    except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        logger.exception('Falha ao abrir seletor de pastas')
+        raise HTTPException(500, 'Não foi possível abrir o seletor. Execute o aplicativo na sessão gráfica do seu computador com suporte a Tkinter.') from error
+    finally:
+        picker_lock.release()
 
 
 @app.get('/api/jobs')
