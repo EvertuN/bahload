@@ -55,7 +55,7 @@ A tela tem um painel de entrada no topo e cartões de downloads abaixo. O visual
 - Backoff entre tentativas: 2, 4, 8… segundos. Downloads concluídos não são repetidos por retry de outro item.
 - Duplicatas são detectadas pelo ID do vídeo na sessão, inclusive em links de formatos diferentes e dentro da seleção. A interface pede confirmação explícita para criar cópias.
 - Reiniciar o servidor limpa fila/histórico em memória, mas preserva arquivos. Detecção de duplicatas não persiste entre sessões.
-- Cada item ganha uma subpasta única no destino. Títulos são sanitizados pelo yt-dlp, limitados a 100 caracteres e acompanhados do ID do vídeo; nomes não sobrescrevem outros itens.
+- Cada item ganha uma subpasta única no destino. O nome do arquivo usa somente o título sanitizado pelo yt-dlp, limitado a 100 caracteres, e a extensão escolhida. As subpastas evitam sobrescrever arquivos com títulos iguais.
 - Conteúdo privado, restrito, removido, bloqueado regionalmente ou lives pode falhar. Não são implementados login, cookies ou contorno de restrições.
 - Diagnóstico em `app.log`, com rotação (2 MB e dois backups). Se o YouTube mudar, atualize o yt-dlp e repita os testes: `python -m pip install --upgrade "yt-dlp[default]"`.
 

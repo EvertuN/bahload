@@ -192,7 +192,7 @@ class DownloadManager:
                 self.repo.update(job['id'], status='processing', speed=None)
 
         opts = {**base_options(), 'noplaylist': True, 'windowsfilenames': True, 'restrictfilenames': True,
-                'outtmpl': str(folder / '%(title).100s [%(id)s].%(ext)s'),
+                'outtmpl': str(folder / '%(title).100s.%(ext)s'),
                 'progress_hooks': [hook], 'postprocessor_hooks': [post_hook],
                 'match_filter': lambda info, **kw: 'Live event not started or still live' if info.get('is_live') or info.get('live_status') == 'is_upcoming' else None}
         if options['kind'] == 'audio':
